@@ -1,0 +1,56 @@
+# Candado de calidad: nada llega a main (ni a producción) si esto no está en verde.
+# Corre en cada push y en cada pull request.
+name: Verificar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: verificar-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    name: Lint, tipos y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Pruebas de lógica (Vitest)
+        run: npm run test
+
+      - name: Instalar navegador de pruebas
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas en navegador (Playwright)
+        run: npm run test:e2e
+
+      - name: Guardar reporte de Playwright si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: reporte-playwright
+          path: playwright-report/
+          retention-days: 7
